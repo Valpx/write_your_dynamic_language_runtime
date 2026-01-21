@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static fr.umlv.smalljs.rt.JSObject.UNDEFINED;
 import static java.util.stream.Collectors.joining;
@@ -138,19 +139,46 @@ public final class ASTInterpreter {
         throw new ReturnError(value);
       }
       case If(Expr condition, Block trueBlock, Block falseBlock, int lineNumber) -> {
-				throw new UnsupportedOperationException("TODO If");
+        var value = visit(condition, env);
+        if (value.equals(1)) {
+          yield execute(trueBlock, env);
+        }
+        yield execute(falseBlock, env);
       }
       case ObjectLiteral(Map<String, Expr> initMap, int lineNumber) -> {
-				throw new UnsupportedOperationException("TODO ObjectLiteral");
+        var newEnv = JSObject.newObject(null);
+        for (var entry : initMap.entrySet()) {
+          newEnv.register(entry.getKey(), visit(entry.getValue(), env));
+        }
+        yield newEnv;
       }
       case FieldAccess(Expr receiver, String name, int lineNumber) -> {
-        throw new UnsupportedOperationException("TODO FieldAccess");
+        var maybeJSObject = visit(receiver, env);
+        if (!(maybeJSObject instanceof JSObject jsObject)) {
+          throw new Failure("not an object " + maybeJSObject + " at line " + lineNumber);
+        }
+        yield jsObject.lookupOrDefault(name, UNDEFINED);
       }
       case FieldAssignment(Expr receiver, String name, Expr expr, int lineNumber) -> {
-        throw new UnsupportedOperationException("TODO FieldAssignment");
+        var maybeJSObject = visit(receiver, env);
+        if (!(maybeJSObject instanceof JSObject jsObject)) {
+          throw new Failure("not an object " + maybeJSObject + " at line " + lineNumber);
+        }
+        var value = visit(expr, env);
+        jsObject.register(name, value);
+        yield value;
       }
       case MethodCall(Expr receiver, String name, List<Expr> args, int lineNumber) -> {
-        throw new UnsupportedOperationException("TODO MethodCall");
+        var maybeJSObject = visit(receiver, env);
+        if (!(maybeJSObject instanceof JSObject jsObject)) {
+          throw new Failure("not an object " + maybeJSObject + " at line " + lineNumber);
+        }
+        var maybeFunc = jsObject.lookupOrDefault(name, null);
+        if (!(maybeFunc instanceof JSObject function)) {
+          throw new Failure("not an object " + maybeFunc + " at line " + lineNumber);
+        }
+        var arguments = args.stream().map(arg -> visit(arg, env)).toArray();
+        yield function.invoke(jsObject, arguments);
       }
     };
   }
